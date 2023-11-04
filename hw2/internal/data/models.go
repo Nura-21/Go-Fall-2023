@@ -16,6 +16,7 @@ type Models struct {
 		Get(id int64) (*Camera, error)
 		Update(camera *Camera) error
 		Delete(id int64) error
+		GetAll(title string, manufacturer string, model string, filters Filters) ([]*Camera, Metadata, error)
 	}
 }
 

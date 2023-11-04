@@ -24,6 +24,50 @@ func (c CameraModel) Insert(camera *Camera) error {
 	return c.DB.QueryRowContext(ctx, query, args...).Scan(&camera.ID, &camera.CreatedAt)
 }
 
+func (c CameraModel) GetAll(title string, manufacturer string, model string, filters Filters) ([]*Camera, Metadata, error) {
+	query := fmt.Sprintf(`
+		SELECT count(*) OVER(), id, created_at, title, year, manufacturer, model, details, version
+		FROM cameras
+		WHERE (STRPOS(LOWER(title), LOWER($1)) > 0 OR $1 = '')
+		AND (STRPOS(LOWER(manufacturer), LOWER($2)) > 0 OR $2 = '')
+		AND (STRPOS(LOWER(model), LOWER($3)) > 0 OR $3 = '')
+		ORDER BY %s %s, id ASC
+		LIMIT $4 OFFSET $5`, filters.sortColumn(), filters.sortDirection())
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	rows, err := c.DB.QueryContext(ctx, query, title, manufacturer, model, filters.limit(), filters.offset())
+	if err != nil {
+		return nil, Metadata{}, err
+	}
+	defer rows.Close()
+	totalRecords := 0
+	cameras := []*Camera{}
+	for rows.Next() {
+		var camera Camera
+		err := rows.Scan(
+			&totalRecords,
+			&camera.ID,
+			&camera.CreatedAt,
+			&camera.Title,
+			&camera.Year,
+			&camera.Manufacturer,
+			&camera.Model,
+			&camera.Details,
+			&camera.Version,
+		)
+		if err != nil {
+			return nil, Metadata{}, err
+		}
+		cameras = append(cameras, &camera)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, Metadata{}, err
+	}
+	metadata := calculateMetadata(totalRecords, filters.Page, filters.PageSize)
+	return cameras, metadata, nil
+}
+
 func (c CameraModel) Get(id int64) (*Camera, error) {
 	if id < 1 {
 		return nil, ErrRecordNotFound

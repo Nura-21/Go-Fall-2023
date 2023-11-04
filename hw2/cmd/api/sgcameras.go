@@ -169,3 +169,38 @@ func (app *application) deleteSGCameraHandler(w http.ResponseWriter, r *http.Req
 		app.serverErrorResponse(w, r, err)
 	}
 }
+
+func (app *application) listCamerasHandler(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Title        string
+		Manufacturer string
+		Model        string
+		data.Filters
+	}
+	v := validator.New()
+	qs := r.URL.Query()
+	input.Title = app.readString(qs, "title", "")
+	input.Manufacturer = app.readString(qs, "manufacturer", "")
+	input.Model = app.readString(qs, "model", "")
+	input.Filters.Page = app.readInt(qs, "page", 1, v)
+	input.Filters.PageSize = app.readInt(qs, "page_size", 20, v)
+	input.Filters.Sort = app.readString(qs, "sort", "id")
+	input.Filters.SortSafelist = []string{"id", "title", "year", "manufacturer", "model", "-id", "-title", "-year", "-manufacturer", "-model"}
+
+	if data.ValidateFilters(v, input.Filters); !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+	// Call the GetAll() method to retrieve the movies, passing in the various filter
+	// parameters.
+	cameras, metadata, err := app.models.Cameras.GetAll(input.Title, input.Manufacturer, input.Model, input.Filters)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+	// Send a JSON response containing the movie data.
+	err = app.writeJSON(w, http.StatusOK, envelope{"cameras": cameras, "metadata": metadata}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
