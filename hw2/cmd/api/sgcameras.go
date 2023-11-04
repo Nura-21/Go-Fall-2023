@@ -6,6 +6,7 @@ import (
 	"hw2/internal/data"
 	"hw2/internal/validator"
 	"net/http"
+	"strconv"
 )
 
 func (app *application) createSGCameraHandler(w http.ResponseWriter, r *http.Request) {
@@ -89,12 +90,19 @@ func (app *application) updateSGCameraHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	if r.Header.Get("X-Expected-Version") != "" {
+		if strconv.FormatInt(int64(camera.Version), 32) != r.Header.Get("X-Expected-Version") {
+			app.editConflictResponse(w, r)
+			return
+		}
+	}
+
 	var input struct {
-		Title        string    `json:"title"`
-		Year         data.Year `json:"year"`
-		Manufacturer string    `json:"manufacturer"`
-		Model        string    `json:"model"`
-		Details      string    `json:"details"`
+		Title        *string    `json:"title"`
+		Year         *data.Year `json:"year"`
+		Manufacturer *string    `json:"manufacturer"`
+		Model        *string    `json:"model"`
+		Details      *string    `json:"details"`
 	}
 
 	err = app.readJSON(w, r, &input)
@@ -102,12 +110,21 @@ func (app *application) updateSGCameraHandler(w http.ResponseWriter, r *http.Req
 		app.badRequestResponse(w, r, err)
 		return
 	}
-
-	camera.Title = input.Title
-	camera.Year = int32(input.Year)
-	camera.Manufacturer = input.Manufacturer
-	camera.Model = input.Model
-	camera.Details = input.Details
+	if input.Title != nil {
+		camera.Title = *input.Title
+	}
+	if input.Year != nil {
+		camera.Year = int32(*input.Year)
+	}
+	if input.Manufacturer != nil {
+		camera.Manufacturer = *input.Manufacturer
+	}
+	if input.Model != nil {
+		camera.Model = *input.Model
+	}
+	if input.Details != nil {
+		camera.Details = *input.Details
+	}
 
 	v := validator.New()
 	if data.ValidateCamera(v, camera); !v.Valid() {
@@ -116,9 +133,15 @@ func (app *application) updateSGCameraHandler(w http.ResponseWriter, r *http.Req
 	}
 	err = app.models.Cameras.Update(camera)
 	if err != nil {
-		app.serverErrorResponse(w, r, err)
+		switch {
+		case errors.Is(err, data.ErrEditConflict):
+			app.editConflictResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
 		return
 	}
+
 	err = app.writeJSON(w, http.StatusOK, envelope{"camera": camera}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)

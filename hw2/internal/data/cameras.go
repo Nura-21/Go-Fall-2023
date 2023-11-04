@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -18,7 +19,9 @@ func (c CameraModel) Insert(camera *Camera) error {
 			VALUES ($1, $2, $3, $4, $5)
 			RETURNING id, created_at`
 	args := []interface{}{camera.Title, camera.Year, camera.Manufacturer, camera.Model, camera.Details}
-	return c.DB.QueryRow(query, args...).Scan(&camera.ID, &camera.CreatedAt)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	return c.DB.QueryRowContext(ctx, query, args...).Scan(&camera.ID, &camera.CreatedAt)
 }
 
 func (c CameraModel) Get(id int64) (*Camera, error) {
@@ -26,11 +29,15 @@ func (c CameraModel) Get(id int64) (*Camera, error) {
 		return nil, ErrRecordNotFound
 	}
 	query := `
-		SELECT id, created_at, title, year, manufacturer, model, details, version
+		SELECT  id, created_at, title, year, manufacturer, model, details, version
 		FROM cameras
 		WHERE id = $1`
 	var camera Camera
-	err := c.DB.QueryRow(query, id).Scan(
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := c.DB.QueryRowContext(ctx, query, id).Scan(
 		&camera.ID,
 		&camera.CreatedAt,
 		&camera.Title,
@@ -55,7 +62,7 @@ func (c CameraModel) Update(camera *Camera) error {
 	query := `
 		UPDATE cameras
 		SET title = $1, year = $2, manufacturer = $3, model = $4, details = $5, version = version + 1
-		WHERE id = $6
+		WHERE id = $6 and version = $7
 		RETURNING version`
 	args := []interface{}{
 		camera.Title,
@@ -64,8 +71,20 @@ func (c CameraModel) Update(camera *Camera) error {
 		camera.Model,
 		camera.Details,
 		camera.ID,
+		camera.Version,
 	}
-	return c.DB.QueryRow(query, args...).Scan(&camera.Version)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	err := c.DB.QueryRowContext(ctx, query, args...).Scan(&camera.Version)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return ErrEditConflict
+		default:
+			return err
+		}
+	}
+	return nil
 }
 
 func (c CameraModel) Delete(id int64) error {
@@ -75,7 +94,9 @@ func (c CameraModel) Delete(id int64) error {
 	query := `
 		DELETE FROM cameras
 		WHERE id = $1`
-	result, err := c.DB.Exec(query, id)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	result, err := c.DB.ExecContext(ctx, query, id)
 	if err != nil {
 		return err
 	}
