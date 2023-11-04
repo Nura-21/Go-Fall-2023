@@ -17,5 +17,5 @@ func (app *application) routes() http.Handler {
 	router.HandlerFunc(http.MethodGet, "/v1/sgcameras/:id", app.showSGCameraHandler)
 	router.HandlerFunc(http.MethodPatch, "/v1/sgcameras/:id", app.updateSGCameraHandler)
 	router.HandlerFunc(http.MethodDelete, "/v1/sgcameras/:id", app.deleteSGCameraHandler)
-	return app.recoverPanic(router)
+	return app.recoverPanic(app.rateLimit(router))
 }
