@@ -14,5 +14,7 @@ func (app *application) routes() *httprouter.Router {
 	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", app.healthcheckHandler)
 	router.HandlerFunc(http.MethodPost, "/v1/sgcameras", app.createSGCameraHandler)
 	router.HandlerFunc(http.MethodGet, "/v1/sgcameras/:id", app.showSGCameraHandler)
+	router.HandlerFunc(http.MethodPut, "/v1/sgcameras/:id", app.updateSGCameraHandler)
+	router.HandlerFunc(http.MethodDelete, "/v1/sgcameras/:id", app.deleteSGCameraHandler)
 	return router
 }

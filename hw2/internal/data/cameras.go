@@ -1,11 +1,93 @@
 package data
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hw2/internal/validator"
 	"time"
 )
+
+type CameraModel struct {
+	DB *sql.DB
+}
+
+func (c CameraModel) Insert(camera *Camera) error {
+	query := `INSERT INTO cameras (title, year, manufacturer, model, details)
+			VALUES ($1, $2, $3, $4, $5)
+			RETURNING id, created_at`
+	args := []interface{}{camera.Title, camera.Year, camera.Manufacturer, camera.Model, camera.Details}
+	return c.DB.QueryRow(query, args...).Scan(&camera.ID, &camera.CreatedAt)
+}
+
+func (c CameraModel) Get(id int64) (*Camera, error) {
+	if id < 1 {
+		return nil, ErrRecordNotFound
+	}
+	query := `
+		SELECT id, created_at, title, year, manufacturer, model, details, version
+		FROM cameras
+		WHERE id = $1`
+	var camera Camera
+	err := c.DB.QueryRow(query, id).Scan(
+		&camera.ID,
+		&camera.CreatedAt,
+		&camera.Title,
+		&camera.Year,
+		&camera.Manufacturer,
+		&camera.Model,
+		&camera.Details,
+		&camera.Version,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+	return &camera, nil
+}
+
+func (c CameraModel) Update(camera *Camera) error {
+	query := `
+		UPDATE cameras
+		SET title = $1, year = $2, manufacturer = $3, model = $4, details = $5, version = version + 1
+		WHERE id = $6
+		RETURNING version`
+	args := []interface{}{
+		camera.Title,
+		camera.Year,
+		camera.Manufacturer,
+		camera.Model,
+		camera.Details,
+		camera.ID,
+	}
+	return c.DB.QueryRow(query, args...).Scan(&camera.Version)
+}
+
+func (c CameraModel) Delete(id int64) error {
+	if id < 1 {
+		return ErrRecordNotFound
+	}
+	query := `
+		DELETE FROM cameras
+		WHERE id = $1`
+	result, err := c.DB.Exec(query, id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrRecordNotFound
+	}
+	return nil
+}
 
 type Camera struct {
 	ID           int64     `json:"id"`           // Unique integer ID for the movie
@@ -15,6 +97,7 @@ type Camera struct {
 	Manufacturer string    `json:"manufacturer"` // Camera manufacturer
 	Model        string    `json:"model"`        // Camera model
 	Details      string    `json:"details"`      // Camera details
+	Version      int32     `json:"version"`      // Camera version
 }
 
 func (c Camera) MarshalJSON() ([]byte, error) {
