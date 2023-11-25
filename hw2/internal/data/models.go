@@ -18,14 +18,16 @@ type Models struct {
 		Delete(id int64) error
 		GetAll(title string, manufacturer string, model string, filters Filters) ([]*Camera, Metadata, error)
 	}
-	Users  UserModel
-	Tokens TokenModel
+	Permissions PermissionModel
+	Users       UserModel
+	Tokens      TokenModel
 }
 
 func NewModels(db *sql.DB) Models {
 	return Models{
-		Cameras: CameraModel{DB: db},
-		Tokens:  TokenModel{DB: db},
-		Users:   UserModel{DB: db},
+		Cameras:     CameraModel{DB: db},
+		Permissions: PermissionModel{DB: db},
+		Tokens:      TokenModel{DB: db},
+		Users:       UserModel{DB: db},
 	}
 }
