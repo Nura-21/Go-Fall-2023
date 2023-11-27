@@ -3,7 +3,12 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"flag"
+	"fmt"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/lib/pq"
 	"hw2/internal/data"
 	"hw2/internal/jsonlog"
@@ -54,7 +59,7 @@ func main() {
 	flag.IntVar(&cfg.port, "port", 4000, "API server port")
 	flag.StringVar(&cfg.env, "env", "development", "Environment (development|staging|production)")
 
-	flag.StringVar(&cfg.db.dsn, "db-dsn", "postgres://postgres:admin@localhost/greenlight?sslmode=disable", "PostgreSQL DSN")
+	flag.StringVar(&cfg.db.dsn, "db-dsn", "postgres://postgres:admin@postgresdb:5432/postgres?sslmode=disable", "PostgreSQL DSN")
 
 	flag.IntVar(&cfg.db.maxOpenConns, "db-max-open-conns", 25, "PostgreSQL max open connections")
 	flag.IntVar(&cfg.db.maxIdleConns, "db-max-idle-conns", 25, "PostgreSQL max idle connections")
@@ -82,6 +87,24 @@ func main() {
 	if err != nil {
 		logger.PrintFatal(err, nil)
 	}
+
+	if !strings.Contains(cfg.db.dsn, "://") {
+		err = errors.New("store: undefined data source name " + cfg.db.dsn)
+		return
+	}
+
+	migrations, err := migrate.New("file://migrations", cfg.db.dsn)
+	if err != nil {
+		return
+	}
+
+	if err = migrations.Up(); err != nil {
+		if errors.Is(err, migrate.ErrNoChange) {
+			err = nil
+		}
+	}
+
+	fmt.Println("Migrations success")
 
 	defer db.Close()
 
