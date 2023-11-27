@@ -30,13 +30,8 @@ services:
       - DATABASE_HOST=${DB_HOST}
     ports:
       - '5432:5432'
-    volumes:
-      - ./pg_data:/var/lib/postgresql/data
     networks:
       - learning
-
-volumes:
-  pg_data:
 
 networks:
   learning:
